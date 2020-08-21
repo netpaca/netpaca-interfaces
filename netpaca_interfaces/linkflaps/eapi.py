@@ -13,10 +13,6 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""
-This file contains the Interface DOM metrics collector supporing the Arista EOS
-devices using the eAPI.
-"""
 
 # -----------------------------------------------------------------------------
 # System Imports
@@ -27,7 +23,7 @@ from typing import Optional, List
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
-
+import maya
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
 from netpaca.drivers.eapi import Device
@@ -36,7 +32,7 @@ from netpaca.drivers.eapi import Device
 # Private Imports
 # -----------------------------------------------------------------------------
 
-import netpaca_interfaces as ifdom
+from netpaca_interfaces import linkflaps
 
 # -----------------------------------------------------------------------------
 # Exports (none)
@@ -58,9 +54,9 @@ __all__ = []
 # -----------------------------------------------------------------------------
 
 
-@ifdom.register
+@linkflaps.register
 async def start(
-    device: Device, executor: CollectorExecutor, spec: ifdom.CollectorModel,
+    device: Device, executor: CollectorExecutor, spec: linkflaps.CollectorModel,
 ):
     """
     The IF DOM collector start coroutine for Arista EOS devices.  The purpose of this
@@ -79,11 +75,11 @@ async def start(
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.info(f"{device.name}: Starting Arista EOS Interface DOM collection")
+    device.log.info(f"{device.name}: Starting Arista EOS link flaps collector")
     executor.start(
         # required args
         spec=spec,
-        coro=get_dom_metrics,
+        coro=get_link_flaps,
         device=device,
         # kwargs to collector coroutine:
         config=spec.config,
@@ -96,13 +92,10 @@ async def start(
 # -----------------------------------------------------------------------------
 
 
-async def get_dom_metrics(
-    device: Device, timestamp: MetricTimestamp, config: ifdom.LinkFlapCollectorConfig
+async def get_link_flaps(
+    device: Device, timestamp: MetricTimestamp, config,
 ) -> Optional[List[Metric]]:
     """
-    This coroutine will be executed as a asyncio Task on a periodic basis, the
-    purpose is to collect data from the device and return the list of Interface
-    DOM metrics.
 
     Parameters
     ----------
@@ -120,158 +113,45 @@ async def get_dom_metrics(
     Option list of Metic items.
     """
 
-    # Execute the required "show" commands to colelct the interface information
-    # needed to produce the Metrics
+    # wait for the interfaces collector to indicate that the data is available
+    # for processing.
 
-    if_dom_res, if_desc_res = await device.eapi.exec(
-        ["show interfaces transceiver detail", "show interfaces description"]
-    )
+    interfaces = device.private['interfaces']
+    await interfaces['event'].wait()
 
-    if not if_dom_res.ok:
-        device.log.error(
-            f"{device.name}: failed to collect DOM information: {if_dom_res.output}, aborting."
-        )
-        return
+    eos_data = interfaces['data']['interfaces']
+    ifs_ts = interfaces['ts']
+    maya_now = interfaces['maya_ts']
 
-    # both ifs_desc and ifs_dom are dict[<if_name>]
+    metrics = list()
 
-    ifs_desc = if_desc_res.output["interfaceDescriptions"]
-    ifs_dom = if_dom_res.output["interfaces"]
+    for if_name, if_data in eos_data.items():
+        # skip interfaces that are not link-up
+        if if_data['interfaceStatus'] != 'connected':
+            continue
 
-    def __ok_process_if(if_name):
+        # EOS stores the value as an epoc timestamp (float).  We need to convert
+        # this to uptime in minutes.
 
-        # if the interface name does not exist in the interface description data
-        # it likely means that the interface name is an unused transciever lane;
-        # and if so then it would be the same data as the "first lane".  In this
-        # case we don't need to record a duplicate metric.
+        last_flapped = if_data['lastStatusChangeTimestamp']
+        dt = maya.MayaDT(epoch=last_flapped)
+        uptime_min = (maya_now - dt).total_seconds() // 60
 
-        if not (if_desc := ifs_desc.get(if_name)):
-            return False
+        # add metric tags for interface name and description
 
-        # examine the interface state vs. what the collector is configured to do.
-
-        if_status = if_desc["interfaceStatus"]
-
-        if if_status == "adminDown":
-            return False
-
-        # if the collector is configure to include interfaces even if the link
-        # is not up, then return True now.
-
-        if config.include_linkdown:
-            return True
-
-        # otherwise only allow interface that are in the link-up condition
-        return if_status == "up"
-
-    metrics = [
-        measurement
-        for if_name, if_dom_data in ifs_dom.items()
-        if if_dom_data and __ok_process_if(if_name)
-        for measurement in _make_if_metrics(
-            ts=timestamp,
+        tags = dict(
             if_name=if_name,
-            if_dom_data=if_dom_data,
-            if_desc=ifs_desc[if_name]["description"],
+            if_desc=if_data['description']
         )
-    ]
+
+        # create the link uptime metric using the timestamp when the interfaces
+        # where collected.
+
+        metrics.append(
+            linkflaps.LinkUptimeMetric(
+                value=uptime_min,
+                ts=ifs_ts, tags=tags
+            )
+        )
 
     return metrics
-
-
-# -----------------------------------------------------------------------------
-#
-#                            PRIVATE FUNCTIONS
-#
-# -----------------------------------------------------------------------------
-
-
-def _make_if_metrics(
-    ts: MetricTimestamp, if_name: str, if_dom_data: dict, if_desc: str
-):
-    """
-    This function is used to create the specific IFdom Metrics for a specific
-    interface.
-
-    Parameters
-    ----------
-    ts: int
-        The timestamp
-
-    if_name:
-        The interface name
-
-    if_dom_data:
-        The interface transceiver details as retrieved via the EAPI
-
-    if_desc:
-        The interface description value
-
-    Yields
-    ------
-    A collection of IFdom specific Metrics.
-    """
-
-    c_tags = {
-        "if_name": if_name,
-        "if_desc": if_desc or "MISSING-DESCRIPTION",
-        "media": if_dom_data["mediaType"],
-    }
-
-    m_txpow = ifdom.IFdomTxPowerMetric(value=if_dom_data["txPower"], tags=c_tags, ts=ts)
-    m_rxpow = ifdom.IFdomRxPowerMetric(value=if_dom_data["rxPower"], tags=c_tags, ts=ts)
-    m_temp = ifdom.IFdomTempMetric(value=if_dom_data["temperature"], tags=c_tags, ts=ts)
-    m_volt = ifdom.IFdomVoltageMetric(value=if_dom_data["voltage"], tags=c_tags, ts=ts)
-
-    yield from [m_txpow, m_rxpow, m_temp, m_volt]
-
-    thresholds = if_dom_data["details"]
-
-    yield ifdom.IFdomRxPowerStatusMetric(
-        value=_threshold_outside(value=m_rxpow.value, thresholds=thresholds["rxPower"]),
-        tags=c_tags,
-        ts=ts,
-    )
-
-    yield ifdom.IFdomTxPowerStatusMetric(
-        value=_threshold_outside(value=m_txpow.value, thresholds=thresholds["txPower"]),
-        tags=c_tags,
-        ts=ts,
-    )
-
-    yield ifdom.IFdomTempStatusMetric(
-        value=_threshold_outside(
-            value=m_temp.value, thresholds=thresholds["temperature"]
-        ),
-        tags=c_tags,
-        ts=ts,
-    )
-
-    yield ifdom.IFdomVoltageStatusMetric(
-        value=_threshold_outside(value=m_volt.value, thresholds=thresholds["voltage"]),
-        tags=c_tags,
-        ts=ts,
-    )
-
-
-def _threshold_outside(value: float, thresholds: dict) -> int:
-    """
-    This function determines a given metric "status" by comparing the IFdom value against
-    the IFdom measurement; which are obtained from the interface transceiver details.
-    The status is encoded as (0=ok, 1=warn, 2=alert)
-
-    Parameters
-    ----------
-    value:
-        The interface DOM value is always a floating point number
-
-    thresholds:
-        The dictionary containing the threshold values
-    """
-    if value <= thresholds["lowAlarm"] or value >= thresholds["highAlarm"]:
-        return 2
-
-    if value <= thresholds["lowWarn"] or value >= thresholds["highWarn"]:
-        return 1
-
-    return 0

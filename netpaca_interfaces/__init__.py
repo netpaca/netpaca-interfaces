@@ -50,4 +50,5 @@ Used to collect the raw interfaces data to share amoung other collectors
 # create an "alias" variable so that the device specific collector packages
 # can register their start functions.
 
+name = InterfaceRawCollectorType.name
 register = InterfaceRawCollectorType.start.register

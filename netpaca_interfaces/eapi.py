@@ -12,11 +12,8 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-
 """
-Collector: Interface Optic Monitoring
-Device: Cisco NX-OS via NXAPI
+This file implements the interfaces collector for Arista EAPI devices.
 """
 
 # -----------------------------------------------------------------------------
@@ -24,15 +21,17 @@ Device: Cisco NX-OS via NXAPI
 # -----------------------------------------------------------------------------
 
 from typing import Optional, List
+from asyncio import Event
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
+import maya
 
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
+from netpaca.drivers.eapi import Device
 from netpaca.config_model import CollectorModel
-from netpaca.drivers.nxapi import Device
 
 # -----------------------------------------------------------------------------
 # Private Imports
@@ -80,12 +79,16 @@ async def start(
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.info(f"{device.name}: Starting Cisco NXAPI interfaces collector")
+    device.log.info(f"{device.name}: Starting Arista EOS interfaces collector")
+
+    device.private['interfaces'] = {
+        'event': Event()
+    }
 
     executor.start(
         # required args
         spec=spec,
-        coro=get_raw_interfaces,
+        coro=get_interfaces,
         device=device,
         # kwargs to collector coroutine:
         config=spec.config,
@@ -99,7 +102,7 @@ async def start(
 # -----------------------------------------------------------------------------
 
 
-async def get_raw_interfaces(
+async def get_interfaces(
     device: Device, timestamp: MetricTimestamp,
     config      # noqa
 ) -> Optional[List[Metric]]:
@@ -123,19 +126,24 @@ async def get_raw_interfaces(
     list of Metic items, or None
     """
 
-    res = await device.nxapi.exec(["show interface"])
-    nxapi_sh_iface = res[0]
+    res = await device.eapi.exec(["show interfaces"])
+    sh_iface = res[0]
 
-    if not nxapi_sh_iface.ok:
-        device.log.error(f"{device.name}: unable to obtain interface data, will try again.")
+    if not sh_iface.ok:
+        device.log.error(f"{device.name}/{interfaces.name}: unable to obtain interface data, will try again.")
         return None
 
     # store the raw interfaces data into the private area of the device instance
     # so that it can be used by other collectors.  The method used here is just
     # a first trial; might use something different in the future.
 
-    device.private['interfaces_ts'] = timestamp
-    device.private['interfaces'] = nxapi_sh_iface.output
+    device.private['interfaces'].update({
+        'ts': timestamp,
+        'maya_ts': maya.now(),
+        'data': sh_iface.output
+    })
 
-    # no metrics to export, so return None.
+    # trigger the pending tasks to awake to process the data.
+    device.private['interfaces']['event'].set()
+
     return None

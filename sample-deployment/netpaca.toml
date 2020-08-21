@@ -100,9 +100,12 @@
 #                   collector(s)
 # -----------------------------------------------------------------------------
 
-#[device_drivers.eos]
-#    use = "netpaca.device_drivers:arista.eos"
-#    modules = ["netpaca_optics.eapi"]
+[device_drivers.eos]
+    use = "netpaca.device_drivers:arista.eos"
+    modules = [
+        "netpaca_interfaces.eapi",
+        "netpaca_interfaces.linkflaps.eapi"
+    ]
 
 [device_drivers.nxos]
     use = "netpaca.device_drivers:cisco.nxapi"
