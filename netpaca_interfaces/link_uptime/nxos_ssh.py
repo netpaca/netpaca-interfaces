@@ -36,8 +36,8 @@ from netpaca.drivers.nxos_ssh import Device
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netpaca_interfaces import linkflaps
-from netpaca_interfaces.linkflaps.nxapi import get_link_uptimes
+from netpaca_interfaces import link_uptime
+from netpaca_interfaces.link_uptime.nxapi import get_link_uptimes
 
 
 # -----------------------------------------------------------------------------
@@ -60,9 +60,9 @@ __all__ = []
 # -----------------------------------------------------------------------------
 
 
-@linkflaps.register
+@link_uptime.register
 async def start(
-    device: Device, executor: CollectorExecutor, spec: linkflaps.CollectorModel
+    device: Device, executor: CollectorExecutor, spec: link_uptime.CollectorModel
 ):
     """
     The IF DOM collector start coroutine for Cisco NXOS SSH devices.  The

@@ -47,7 +47,7 @@ from netpaca.drivers.nxapi import Device
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netpaca_interfaces import linkflaps
+from netpaca_interfaces import link_uptime
 
 # -----------------------------------------------------------------------------
 # Exports (none)
@@ -68,9 +68,9 @@ __all__ = ["get_link_uptimes"]
 # -----------------------------------------------------------------------------
 
 
-@linkflaps.register
+@link_uptime.register
 async def start(
-    device: Device, executor: CollectorExecutor, spec: linkflaps.CollectorModel
+    device: Device, executor: CollectorExecutor, spec: link_uptime.CollectorModel
 ):
     """
     The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
@@ -113,7 +113,7 @@ _re_timestamp = re.compile(r"(?P<H>\d\d):(?P<M>\d\d):(?P<S>\d\d)")
 async def get_link_uptimes(
     device: Device,
     timestamp: MetricTimestamp,
-    config: linkflaps.LinkFlapCollectorConfig,  # noqa
+    config: link_uptime.LinkUptimeCollectorConfig,  # noqa
 ) -> Optional[List[Metric]]:
     """
     This coroutine will be executed as a asyncio Task on a periodic basis, the
@@ -135,7 +135,7 @@ async def get_link_uptimes(
     list of Metic items, or None
     """
 
-    log_ident = f"{device.name}/{linkflaps.name}"
+    log_ident = f"{device.name}/{link_uptime.name}"
 
     if (interfaces_xml := device.private.get("interfaces")) is None:
         device.log.warning(
@@ -173,7 +173,7 @@ async def get_link_uptimes(
         # TODO: skip any uptime that is greater than the configured threshold.
 
         metrics.append(
-            linkflaps.LinkUptimeMetric(value=if_uptime_min, ts=timestamp, tags=tags)
+            link_uptime.LinkUptimeMetric(value=if_uptime_min, ts=timestamp, tags=tags)
         )
 
     return metrics

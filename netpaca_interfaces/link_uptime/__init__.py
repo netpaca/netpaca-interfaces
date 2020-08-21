@@ -34,7 +34,7 @@ from netpaca.config_model import CollectorModel  # noqa
 # -----------------------------------------------------------------------------
 
 
-class LinkFlapCollectorConfig(CollectorConfigModel):
+class LinkUptimeCollectorConfig(CollectorConfigModel):
     """ link flaps collector configuraiton options """
 
     uptime_threshold: Optional[int] = Field(
@@ -46,7 +46,7 @@ $uptime_threshold minutes.  For example 1 day is 3_840 minutes.
     )
 
 
-class LinkFlapCollectorTags(BaseModel):
+class LinkUptimeCollectorTags(BaseModel):
     """ link uptime metric tags """
 
     if_name: str = Field(description="interface name")
@@ -77,7 +77,7 @@ class LinkUptimeMetric(Metric):
 # -----------------------------------------------------------------------------
 
 
-class LinkFlapCollectorType(CollectorType):
+class LinkUptimeCollectorType(CollectorType):
     """
     This class defines the Link Flap collector specification.  This class is
     "registered" with the "netpaca.collectors" entry_point group via the
@@ -90,17 +90,17 @@ class LinkFlapCollectorType(CollectorType):
         use = "netpaca.collectors:linkflap"
     """
 
-    name = "linkflaps"
+    name = "link_uptime"
     description = """
 Used to collect interface uptime (last flap) metrics
 """
-    config = LinkFlapCollectorConfig
-    tags: LinkFlapCollectorTags
+    config = LinkUptimeCollectorConfig
+    tags: LinkUptimeCollectorTags
     metrics = [LinkUptimeMetric]
 
 
 # create an "alias" variable so that the device specific collector packages
 # can register their start functions.
 
-name = LinkFlapCollectorType.name
-register = LinkFlapCollectorType.start.register
+name = LinkUptimeCollectorType.name
+register = LinkUptimeCollectorType.start.register

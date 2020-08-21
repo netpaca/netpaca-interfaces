@@ -47,7 +47,7 @@ setup(
     entry_points={
         "netpaca.collectors": [
             "interfaces = netpaca_interfaces:InterfaceRawCollectorType",
-            "linkflaps = netpaca_interfaces.linkflaps:LinkFlapCollectorType",
+            "link_uptime = netpaca_interfaces.link_uptime:LinkUptimeCollectorType",
         ],
     },
     classifiers=[

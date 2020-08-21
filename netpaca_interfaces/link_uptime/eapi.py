@@ -32,7 +32,7 @@ from netpaca.drivers.eapi import Device
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netpaca_interfaces import linkflaps
+from netpaca_interfaces import link_uptime
 
 # -----------------------------------------------------------------------------
 # Exports (none)
@@ -54,9 +54,9 @@ __all__ = []
 # -----------------------------------------------------------------------------
 
 
-@linkflaps.register
+@link_uptime.register
 async def start(
-    device: Device, executor: CollectorExecutor, spec: linkflaps.CollectorModel,
+    device: Device, executor: CollectorExecutor, spec: link_uptime.CollectorModel,
 ):
     """
     The IF DOM collector start coroutine for Arista EOS devices.  The purpose of this
@@ -149,7 +149,7 @@ async def get_link_flaps(
         # where collected.
 
         metrics.append(
-            linkflaps.LinkUptimeMetric(value=uptime_min, ts=ifs_ts, tags=tags)
+            link_uptime.LinkUptimeMetric(value=uptime_min, ts=ifs_ts, tags=tags)
         )
 
     return metrics

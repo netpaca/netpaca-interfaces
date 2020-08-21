@@ -19,7 +19,7 @@
     # be active, then set the collections list.  Otherwise all collectors
     # defined in this configuration file will be used.
 
-    collectors = ["interfaces", "linkflap"]
+    collectors = ["interfaces", "link_uptime"]
 
     # currently only one active exporter is supported; but plan to support
     # multiple exports in the future.  If `exporters` is not defined then the
@@ -61,9 +61,11 @@
     use = "netpaca.collectors:interfaces"
 
 
-[collectors.linkflap]
-    use = "netpaca.collectors:linkflaps"
-    config.uptime_threshold = 1_440              # 1 day in minutes
+[collectors.link_uptime]
+    use = "netpaca.collectors:link_uptime"
+
+    # do not report metrics for interfaces up longer than 1 day
+    config.uptime_threshold = 1_440              
 
 # -----------------------------------------------------------------------------
 # Exporters:
@@ -104,21 +106,21 @@
     use = "netpaca.device_drivers:arista.eos"
     modules = [
         "netpaca_interfaces.eapi",
-        "netpaca_interfaces.linkflaps.eapi"
+        "netpaca_interfaces.link_uptime.eapi"
     ]
 
 [device_drivers.nxos]
     use = "netpaca.device_drivers:cisco.nxapi"
     modules = [
         "netpaca_interfaces.nxapi",
-        "netpaca_interfaces.linkflaps.nxapi"
+        "netpaca_interfaces.link_uptime.nxapi"
     ]
 
 [device_drivers.nxos_ssh]
     use = "netpaca.device_drivers:cisco.nxos_ssh"
     modules = [
         "netpaca_interfaces.nxos_ssh",
-        "netpaca_interfaces.linkflaps.nxos_ssh"
+        "netpaca_interfaces.link_uptime.nxos_ssh"
     ]
 
 #
