@@ -1,0 +1,95 @@
+# -----------------------------------------------------------------------------
+# Netpaca Optic Monitoring
+#
+# This docker-compose file is used to manage the containers responsible for the
+# interface optics monitoring service.  This includes the following:
+#
+#   - Grafana for visualization
+#   - InfluxDB for TSDB
+#   - multiple collector containers that are used to monitor slices
+#     of the network inventory
+# -----------------------------------------------------------------------------
+
+version: '3.7'
+
+# -----------------------------------------------------------------------------
+# Define the common set of netpaca container options that will be reused for
+# each of the inventory slices; requires docker-compose version 3.7
+# -----------------------------------------------------------------------------
+
+x-netpaca:
+  &shared-netpaca-interfaces
+  image: netpaca-interfaces:0.1.0
+
+  # we're going to enable debug logging by default, so we want to cap
+  # the filesystem resources used
+
+  logging:
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+  # connect the container to the shared docker network so the exporter
+  # configurations will get the metrics to the influxdb container
+
+  networks:
+    netpaca:
+
+  volumes:
+    - $NETPACA_DIR/netpaca.toml:/etc/netpaca/netpaca.toml
+    - $NETPACA_DIR/inventory.csv:/etc/netpaca/inventory.csv
+
+  # the following variables are using _inside_ the container by the the
+  # netpaca.toml configuation file
+
+  environment:
+    INVENTORY_CSV: /etc/netpaca/inventory.csv
+    INFLUXDB_SERVER: http://influxdb:8086
+
+  # pass the container environment variables that contain the device login
+  # credentials so that the values used in the netpaca.toml file exists and can
+  # be used.
+
+  env_file:
+    - $NETPACA_CREDSDIR/credentials.env
+
+
+# -----------------------------------------------------------------------------
+#
+#                                  Services
+#
+# -----------------------------------------------------------------------------
+
+services:
+
+# -----------------------------------------------------------------------------
+#                     Monitoring Services for slices of inventory
+# -----------------------------------------------------------------------------
+
+  link-uptime-core:
+    << : *shared-netpaca-interfaces
+    command: >
+      netpaca -C /etc/netpaca/netpaca.toml
+      --limit role=core
+      --log-level debug
+
+  link-uptime-notcore:
+    << : *shared-netpaca-interfaces
+    command: >
+      netpaca -C /etc/netpaca/netpaca.toml
+      --exclude role=core
+      --log-level debug
+
+# -----------------------------------------------------------------------------
+#
+#                                  Networks
+#
+# -----------------------------------------------------------------------------
+
+networks:
+  netpaca:
+    # use an explicit name so that you can use this network with other
+    # docker-compose based health monitoring systems.  If you do not
+    # set the name explicitly, then the name will be mangled with
+    # the docker-compose project name (undesired)
+    name: "netpaca"

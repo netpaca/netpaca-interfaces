@@ -1,0 +1,36 @@
+services:
+
+# -----------------------------------------------------------------------------
+#                            Grafana and InfluxDB Services
+# -----------------------------------------------------------------------------
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+       - 3000:3000
+    environment:
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_LOG_FILTERS: rendering:debug
+    user: "0"   # needed for volume mounting
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    networks:
+      netpaca:
+
+  renderer:
+    image: grafana/grafana-image-renderer:latest
+    ports:
+      - 8081:8081
+    networks:
+      netpaca:
+
+  influxdb:
+    image: influxdb
+    ports:
+      - 8086:8086
+    volumes:
+      - $NETPACADIR:/var/lib/influxdb
+    networks:
+      netpaca:
