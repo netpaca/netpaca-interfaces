@@ -90,7 +90,7 @@ class LinkUptimeCollectorType(CollectorType):
         use = "netpaca.collectors:linkflap"
     """
 
-    name = "link_uptime"
+    name = "link-uptime"
     description = """
 Used to collect interface uptime (last flap) metrics
 """

@@ -137,11 +137,12 @@ async def get_link_uptimes(
 
     log_ident = f"{device.name}/{link_uptime.name}"
 
-    if (interfaces_xml := device.private.get("interfaces")) is None:
-        device.log.warning(
-            f"{log_ident}: interface data not avaialble, will try again."
-        )
-        return None
+    # wait for the interfaces collector to indicate that the data is available
+    # for processing.
+
+    interfaces = device.private["interfaces"]
+    await interfaces["event"].wait()
+    interfaces_xml = interfaces['data']
 
     # find all of the interface records that have an eth_link_flapped element,
     # not all of them do.  We also want to exclude any record that has "never
@@ -151,7 +152,10 @@ async def get_link_uptimes(
     iface_elist = interfaces_xml.xpath(
         'TABLE_interface/ROW_interface[eth_link_flapped[. != "never"]]'
     )
-    dt_now = maya.now()
+
+    dt_now = interfaces['maya_ts']
+    ts_now = interfaces['ts']
+
     metrics = list()
 
     for rec in iface_elist:
@@ -173,7 +177,7 @@ async def get_link_uptimes(
         # TODO: skip any uptime that is greater than the configured threshold.
 
         metrics.append(
-            link_uptime.LinkUptimeMetric(value=if_uptime_min, ts=timestamp, tags=tags)
+            link_uptime.LinkUptimeMetric(value=if_uptime_min, ts=ts_now, tags=tags)
         )
 
     return metrics

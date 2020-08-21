@@ -24,10 +24,13 @@ Device: Cisco NX-OS via NXAPI
 # -----------------------------------------------------------------------------
 
 from typing import Optional, List
+from asyncio import Event
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
+
+import maya
 
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
@@ -79,6 +82,7 @@ async def start(device: Device, executor: CollectorExecutor, spec: CollectorMode
         collector; for example the collector configuration values.
     """
     device.log.info(f"{device.name}: Starting Cisco NXAPI interfaces collector")
+    device.private["interfaces"] = {"event": Event()}
 
     executor.start(
         # required args
@@ -133,8 +137,12 @@ async def get_raw_interfaces(
     # so that it can be used by other collectors.  The method used here is just
     # a first trial; might use something different in the future.
 
-    device.private["interfaces_ts"] = timestamp
-    device.private["interfaces"] = nxapi_sh_iface.output
+    device.private["interfaces"].update(
+        {"ts": timestamp, "maya_ts": maya.now(), "data": nxapi_sh_iface.output}
+    )
+
+    # trigger the pending tasks to awake to process the data.
+    device.private["interfaces"]["event"].set()
 
     # no metrics to export, so return None.
     return None
