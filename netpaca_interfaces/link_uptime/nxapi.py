@@ -13,10 +13,17 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
 """
-Collector: Interface Optic Monitoring
-Device: Cisco NX-OS via NXAPI
+This file contains the interface link-flap collector for Cisco NX-OS based
+systems.  Based on current observations, there are three distinct types
+of "uptime" duration formats:
+
+    "07:20:17" - indicates 7 hours 20 minutes 17 seconds ago
+    "6week(s) 1day(s)" - indicates 6 weeks and 1 day ago
+    "3d04h" - indicates 3 day and 4 hours ago
+
+Each of these different types need to be converted into "minutes ago"
+for metric value consistency.
 """
 
 # -----------------------------------------------------------------------------
@@ -24,6 +31,7 @@ Device: Cisco NX-OS via NXAPI
 # -----------------------------------------------------------------------------
 
 from typing import Optional, List
+import re
 
 # -----------------------------------------------------------------------------
 # Public Imports
@@ -33,20 +41,19 @@ import maya
 
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
-from netpaca.config_model import CollectorModel
 from netpaca.drivers.nxapi import Device
 
 # -----------------------------------------------------------------------------
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netpaca_interfaces import raw
+from netpaca_interfaces import link_uptime
 
 # -----------------------------------------------------------------------------
 # Exports (none)
 # -----------------------------------------------------------------------------
 
-__all__ = []
+__all__ = ["get_link_uptimes"]
 
 # -----------------------------------------------------------------------------
 #
@@ -61,9 +68,9 @@ __all__ = []
 # -----------------------------------------------------------------------------
 
 
-@raw.register
+@link_uptime.register
 async def start(
-    device: Device, executor: CollectorExecutor, spec: CollectorModel
+    device: Device, executor: CollectorExecutor, spec: link_uptime.CollectorModel
 ):
     """
     The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
@@ -82,12 +89,12 @@ async def start(
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.info(f"{device.name}: Starting Cisco NXAPI interfaces collector")
+    device.log.info(f"{device.name}: Starting Cisco NXAPI Link Flap collection")
 
     executor.start(
         # required args
         spec=spec,
-        coro=get_raw_interfaces,
+        coro=get_link_uptimes,
         device=device,
         # kwargs to collector coroutine:
         config=spec.config,
@@ -100,9 +107,13 @@ async def start(
 #
 # -----------------------------------------------------------------------------
 
+_re_timestamp = re.compile(r"(?P<H>\d\d):(?P<M>\d\d):(?P<S>\d\d)")
 
-async def get_raw_interfaces(
-    device: Device, timestamp: MetricTimestamp, config: CollectorModel
+
+async def get_link_uptimes(
+    device: Device,
+    timestamp: MetricTimestamp,
+    config: link_uptime.LinkUptimeCollectorConfig,  # noqa
 ) -> Optional[List[Metric]]:
     """
     This coroutine will be executed as a asyncio Task on a periodic basis, the
@@ -124,19 +135,45 @@ async def get_raw_interfaces(
     list of Metic items, or None
     """
 
-    res = await device.nxapi.exec(["show interface"])
-    nxapi_sh_iface = res[0]
+    log_ident = f"{device.name}/{link_uptime.name}"
 
-    if not nxapi_sh_iface.ok:
-        device.log.error(f"{device.name}: unable to obtain interface data, will try again.")
+    if (interfaces_xml := device.private.get("interfaces")) is None:
+        device.log.warning(
+            f"{log_ident}: interface data not avaialble, will try again."
+        )
         return None
 
-    # store the raw interfaces data into the private area of the device instance
-    # so that it can be used by other collectors.  The method used here is just
-    # a first trial; might use something different in the future.
+    # find all of the interface records that have an eth_link_flapped element,
+    # not all of them do.  We also want to exclude any record that has "never
+    # flapped".  For each of these records we want to convert the value into an
+    # "uptime in minutes" metric.
 
-    device.private['interfaces_ts'] = timestamp
-    device.private['interfaces'] = nxapi_sh_iface.output
+    iface_elist = interfaces_xml.xpath(
+        'TABLE_interface/ROW_interface[eth_link_flapped[. != "never"]]'
+    )
+    dt_now = maya.now()
+    metrics = list()
 
-    # no metrics to export, so return None.
-    return None
+    for rec in iface_elist:
+
+        tags = dict(if_name=rec.findtext("interface"), if_desc=rec.findtext("desc"))
+
+        last_flapped = rec.findtext("eth_link_flapped")
+
+        # if the last_flapped value is in the "%H:%M:%S" format, then we need to
+        # transform it into a duration format that can be consumed by the maya
+        # package.
+
+        if (mo := _re_timestamp.match(last_flapped)) is not None:
+            last_flapped = "{}h{}m{}s".format(*mo.groups())
+
+        if_uptime = dt_now - maya.when(last_flapped)
+        if_uptime_min = if_uptime.total_seconds() // 60
+
+        # TODO: skip any uptime that is greater than the configured threshold.
+
+        metrics.append(
+            link_uptime.LinkUptimeMetric(value=if_uptime_min, ts=timestamp, tags=tags)
+        )
+
+    return metrics

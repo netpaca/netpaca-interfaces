@@ -14,11 +14,6 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-"""
-Collector: Interface Optic Monitoring
-Device: Cisco NX-OS via NXAPI
-"""
-
 # -----------------------------------------------------------------------------
 # System Imports
 # -----------------------------------------------------------------------------
@@ -28,19 +23,16 @@ from typing import Optional, List
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
-
 import maya
-from lxml import etree
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
-from netpaca.config_model import CollectorModel
-from netpaca.drivers.nxos_ssh import Device
+from netpaca.drivers.eapi import Device
 
 # -----------------------------------------------------------------------------
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netpaca_interfaces import raw
+from netpaca_interfaces import link_uptime
 
 # -----------------------------------------------------------------------------
 # Exports (none)
@@ -48,31 +40,32 @@ from netpaca_interfaces import raw
 
 __all__ = []
 
+
 # -----------------------------------------------------------------------------
 #
-#                                   CODE BEGINS
+#                                 CODE BEGINS
 #
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 #
-#                 Register Cisco Device NXAPI to Colletor Type
+#                     Register Arista Device to Colletor Type
 #
 # -----------------------------------------------------------------------------
 
 
-@raw.register
+@link_uptime.register
 async def start(
-    device: Device, executor: CollectorExecutor, spec: CollectorModel
+    device: Device, executor: CollectorExecutor, spec: link_uptime.CollectorModel,
 ):
     """
-    The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
-    purpose of this coroutine is to start the collector task.  Nothing fancy.
+    The IF DOM collector start coroutine for Arista EOS devices.  The purpose of this
+    coroutine is to start the collector task.  Nothing fancy.
 
     Parameters
     ----------
     device:
-        The device driver instance for the Cisco device
+        The device driver instance for the Arista device
 
     executor:
         The executor that is used to start one or more collector tasks. In this
@@ -82,12 +75,11 @@ async def start(
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.info(f"{device.name}: Starting Cisco SSH interfaces collector")
-
+    device.log.info(f"{device.name}: Starting Arista EOS link flaps collector")
     executor.start(
         # required args
         spec=spec,
-        coro=get_raw_interfaces,
+        coro=get_link_flaps,
         device=device,
         # kwargs to collector coroutine:
         config=spec.config,
@@ -101,55 +93,63 @@ async def start(
 # -----------------------------------------------------------------------------
 
 
-async def get_raw_interfaces(
-    device: Device, timestamp: MetricTimestamp, config: CollectorModel
+async def get_link_flaps(
+    device: Device,
+    timestamp: MetricTimestamp,  # noqa - not used
+    config,  # noqa - not used
 ) -> Optional[List[Metric]]:
     """
-    This coroutine will be executed as a asyncio Task on a periodic basis, the
-    purpose is to collect data from the device and return the list Metrics.
+    This coroutine is used to create the link uptime metrics for Arista EOS
+    systems.  Only interfaces that are link-up are included in the metrics
+    collection.
 
     Parameters
     ----------
     device:
-        The Cisco device driver instance for this device.
+        The Arisa EOS device driver instance for this device.
 
     timestamp: MetricTimestamp
-        The current timestamp
+        The timestamp now in milliseconds
 
     config:
         The collector configuration options
 
-    Returns
-    -------
-    list of Metic items, or None
     """
 
-    # NOTE: the newline is *required* due to the nature of the device driver looking for
-    #       prompt-matching.  Refer to Carl Montanari, author of scrapli.
-    res = await device.driver.send_command('show interface | xml\n')
-    if res.failed:
-        device.log.error(f"{device.name}: unable to obtain interface data, will try again.")
-        return None
+    # wait for the interfaces collector to indicate that the data is available
+    # for processing.
 
-    # the CLI command response is text, and we need to "take" the
-    # TABLE_interface element only so that we can parse it into an XML structure
-    # for later use by the collectors.  The element that parents TABLE_interface
-    # is <__readonly__>
+    interfaces = device.private["interfaces"]
+    await interfaces["event"].wait()
 
-    start_of_xml = res.result.find('<__readonly__>')
-    etag = '</__readonly__>'
-    end_of_xml = res.result.rfind(etag) + len(etag)
-    content = res.result[start_of_xml:end_of_xml]
-    with open('interfaces.xml', 'w+') as ofile: ofile.write(content)
+    eos_data = interfaces["data"]["interfaces"]
+    ifs_ts = interfaces["ts"]
+    maya_now = interfaces["maya_ts"]
 
-    as_xml = etree.fromstring(content)
+    metrics = list()
 
-    # store the raw interfaces data into the private area of the device instance
-    # so that it can be used by other collectors.  The method used here is just
-    # a first trial; might use something different in the future.
+    for if_name, if_data in eos_data.items():
 
-    device.private['interfaces_ts'] = timestamp
-    device.private['interfaces'] = as_xml
+        # skip interfaces that are not link-up
+        if if_data["interfaceStatus"] != "connected":
+            continue
 
-    # no metrics to export, so return None.
-    return None
+        # EOS stores the value as an epoc timestamp (float).  We need to convert
+        # this to uptime in minutes.
+
+        last_flapped = if_data["lastStatusChangeTimestamp"]
+        dt = maya.MayaDT(epoch=last_flapped)
+        uptime_min = (maya_now - dt).total_seconds() // 60
+
+        # add metric tags for interface name and description
+
+        tags = dict(if_name=if_name, if_desc=if_data["description"])
+
+        # create the link uptime metric using the timestamp when the interfaces
+        # where collected.
+
+        metrics.append(
+            link_uptime.LinkUptimeMetric(value=uptime_min, ts=ifs_ts, tags=tags)
+        )
+
+    return metrics

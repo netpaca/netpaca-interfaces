@@ -15,7 +15,6 @@
 
 
 from setuptools import setup, find_packages
-from itertools import chain
 
 package_name = "netpaca_interfaces"
 package_version = open("VERSION").read().strip()
@@ -47,8 +46,8 @@ setup(
     install_requires=requirements(),
     entry_points={
         "netpaca.collectors": [
-            "interfaces = netpaca_interfaces.raw:InterfaceRawCollectorType",
-            "linkflaps = netpaca_interfaces:LinkFlapCollectorType"
+            "interfaces = netpaca_interfaces:InterfaceRawCollectorType",
+            "link_uptime = netpaca_interfaces.link_uptime:LinkUptimeCollectorType",
         ],
     },
     classifiers=[
