@@ -135,14 +135,12 @@ async def get_link_uptimes(
     list of Metic items, or None
     """
 
-    log_ident = f"{device.name}/{link_uptime.name}"
-
     # wait for the interfaces collector to indicate that the data is available
     # for processing.
 
     interfaces = device.private["interfaces"]
     await interfaces["event"].wait()
-    interfaces_xml = interfaces['data']
+    interfaces_xml = interfaces["data"]
 
     # find all of the interface records that have an eth_link_flapped element,
     # not all of them do.  We also want to exclude any record that has "never
@@ -153,8 +151,8 @@ async def get_link_uptimes(
         'TABLE_interface/ROW_interface[eth_link_flapped[. != "never"]]'
     )
 
-    dt_now = interfaces['maya_ts']
-    ts_now = interfaces['ts']
+    dt_now = interfaces["maya_ts"]
+    ts_now = interfaces["ts"]
 
     metrics = list()
 
