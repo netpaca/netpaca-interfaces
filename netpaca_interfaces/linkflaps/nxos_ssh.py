@@ -13,34 +13,32 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
 """
 Collector: Interface Optic Monitoring
-Device: Cisco NX-OS via NXAPI
-"""
+Device: Cisco IOS via SSH
 
+For details on the async SSH device driver, refer to the scrapli
+project: https://github.com/carlmontanari/scrapli
+
+"""
 # -----------------------------------------------------------------------------
 # System Imports
 # -----------------------------------------------------------------------------
-
-from typing import Optional, List
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
 
-import maya
-
-from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
-from netpaca.config_model import CollectorModel
-from netpaca.drivers.nxapi import Device
+from netpaca.drivers.nxos_ssh import Device
 
 # -----------------------------------------------------------------------------
 # Private Imports
 # -----------------------------------------------------------------------------
 
-from netpaca_interfaces import raw
+from netpaca_interfaces import linkflaps
+from netpaca_interfaces.linkflaps.nxapi import get_link_uptimes
+
 
 # -----------------------------------------------------------------------------
 # Exports (none)
@@ -48,31 +46,31 @@ from netpaca_interfaces import raw
 
 __all__ = []
 
+
 # -----------------------------------------------------------------------------
 #
-#                                   CODE BEGINS
+#                                CODE BEGINS
 #
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 #
-#                 Register Cisco Device NXAPI to Colletor Type
+#                  Register Cisco Device SSH to Colletor Type
 #
 # -----------------------------------------------------------------------------
 
-
-@raw.register
+@linkflaps.register
 async def start(
-    device: Device, executor: CollectorExecutor, spec: CollectorModel
+    device: Device, executor: CollectorExecutor, spec: linkflaps.CollectorModel
 ):
     """
-    The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
+    The IF DOM collector start coroutine for Cisco NXOS SSH devices.  The
     purpose of this coroutine is to start the collector task.  Nothing fancy.
 
     Parameters
     ----------
     device:
-        The device driver instance for the Cisco device
+        The device driver instance for the Arista device
 
     executor:
         The executor that is used to start one or more collector tasks. In this
@@ -82,61 +80,15 @@ async def start(
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.info(f"{device.name}: Starting Cisco NXAPI interfaces collector")
+    device.log.debug(
+        f"{device.name}: Starting Cisco NX-OS SSH link flap collector"
+    )
 
     executor.start(
         # required args
         spec=spec,
-        coro=get_raw_interfaces,
+        coro=get_link_uptimes,
         device=device,
         # kwargs to collector coroutine:
         config=spec.config,
     )
-
-
-# -----------------------------------------------------------------------------
-#
-#                             Collector Coroutine
-#
-# -----------------------------------------------------------------------------
-
-
-async def get_raw_interfaces(
-    device: Device, timestamp: MetricTimestamp, config: CollectorModel
-) -> Optional[List[Metric]]:
-    """
-    This coroutine will be executed as a asyncio Task on a periodic basis, the
-    purpose is to collect data from the device and return the list Metrics.
-
-    Parameters
-    ----------
-    device:
-        The Cisco device driver instance for this device.
-
-    timestamp: MetricTimestamp
-        The current timestamp
-
-    config:
-        The collector configuration options
-
-    Returns
-    -------
-    list of Metic items, or None
-    """
-
-    res = await device.nxapi.exec(["show interface"])
-    nxapi_sh_iface = res[0]
-
-    if not nxapi_sh_iface.ok:
-        device.log.error(f"{device.name}: unable to obtain interface data, will try again.")
-        return None
-
-    # store the raw interfaces data into the private area of the device instance
-    # so that it can be used by other collectors.  The method used here is just
-    # a first trial; might use something different in the future.
-
-    device.private['interfaces_ts'] = timestamp
-    device.private['interfaces'] = nxapi_sh_iface.output
-
-    # no metrics to export, so return None.
-    return None

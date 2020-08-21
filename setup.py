@@ -47,8 +47,8 @@ setup(
     install_requires=requirements(),
     entry_points={
         "netpaca.collectors": [
-            "interfaces = netpaca_interfaces.raw:InterfaceRawCollectorType",
-            "linkflaps = netpaca_interfaces:LinkFlapCollectorType"
+            "interfaces = netpaca_interfaces:InterfaceRawCollectorType",
+            "linkflaps = netpaca_interfaces.linkflaps:LinkFlapCollectorType"
         ],
     },
     classifiers=[

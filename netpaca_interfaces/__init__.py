@@ -18,52 +18,8 @@
 This file contains the collctor definition for Link Flap.
 """
 
-from typing import Optional
-from pydantic.dataclasses import dataclass
-from pydantic import Field, BaseModel
-
-from netpaca import Metric
 from netpaca.collectors import CollectorType, CollectorConfigModel
 from netpaca.config_model import CollectorModel  # noqa
-
-# -----------------------------------------------------------------------------
-#
-#                              Collector Config
-# -----------------------------------------------------------------------------
-# Define the collector configuraiton options that the User can set in their
-# configuration file.
-# -----------------------------------------------------------------------------
-
-
-class LinkFlapCollectorConfig(CollectorConfigModel):
-    uptime_threshold: Optional[int] = Field(
-        default=False,
-        description="""\
-Use this value to exclude interfaces that have been up for longer than
-$uptime_threshold minutes.  For example 1 day is 3_840 minutes.
-""",
-    )
-
-
-class LinkFlapCollectorTags(BaseModel):
-    if_name: str = Field(description='interface name')
-    if_desc: str = Field(description='interface description')
-
-
-# -----------------------------------------------------------------------------
-#
-#                              Metrics
-#
-# -----------------------------------------------------------------------------
-# This section defines the Metric types supported by the Link Flap Collector
-# -----------------------------------------------------------------------------
-
-@dataclass
-class LinkUptimeMetric(Metric):
-    """ Link uptime in minutes """
-    value: int
-    name: str = "linkflap_uptime"
-
 
 # -----------------------------------------------------------------------------
 #
@@ -72,7 +28,7 @@ class LinkUptimeMetric(Metric):
 # -----------------------------------------------------------------------------
 
 
-class LinkFlapCollectorType(CollectorType):
+class InterfaceRawCollectorType(CollectorType):
     """
     This class defines the Link Flap collector specification.  This class is
     "registered" with the "netpaca.collectors" entry_point group via the
@@ -81,21 +37,17 @@ class LinkFlapCollectorType(CollectorType):
 
     Examples (Configuration File)
     -----------------------------
-    [collectors.linkflap]
-        use = "netpaca.collectors:linkflap"
+    [collectors.interfaces]
+        use = "netpaca.collectors:interfaces"
     """
 
-    name = "linkflap"
+    name = "interfaces"
     description = """
-Used to collect interface uptime (last flap) metrics
+Used to collect the raw interfaces data to share amoung other collectors
 """
-    config = LinkFlapCollectorConfig
-    tags: LinkFlapCollectorTags
-    metrics = [LinkUptimeMetric]
 
 
 # create an "alias" variable so that the device specific collector packages
 # can register their start functions.
 
-name = LinkFlapCollectorType.name
-register = LinkFlapCollectorType.start.register
+register = InterfaceRawCollectorType.start.register

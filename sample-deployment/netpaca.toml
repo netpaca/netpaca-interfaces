@@ -63,7 +63,7 @@
 
 [collectors.linkflap]
     use = "netpaca.collectors:linkflaps"
-    config.uptime_threshold = 3_840              # 1 day in minutes
+    config.uptime_threshold = 1_440              # 1 day in minutes
 
 # -----------------------------------------------------------------------------
 # Exporters:
@@ -108,14 +108,14 @@
     use = "netpaca.device_drivers:cisco.nxapi"
     modules = [
         "netpaca_interfaces.nxapi",
-        "netpaca_interfaces.raw.nxapi"
+        "netpaca_interfaces.linkflaps.nxapi"
     ]
 
 [device_drivers.nxos_ssh]
     use = "netpaca.device_drivers:cisco.nxos_ssh"
     modules = [
         "netpaca_interfaces.nxos_ssh",
-        "netpaca_interfaces.raw.nxos_ssh"
+        "netpaca_interfaces.linkflaps.nxos_ssh"
     ]
 
 #
