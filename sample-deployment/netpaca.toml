@@ -65,7 +65,7 @@
     use = "netpaca.collectors:link_uptime"
 
     # do not report metrics for interfaces up longer than 1 day
-    config.uptime_threshold = 1_440              
+    config.uptime_threshold = 1_440
 
 # -----------------------------------------------------------------------------
 # Exporters:
