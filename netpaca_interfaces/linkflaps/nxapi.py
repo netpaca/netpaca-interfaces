@@ -107,12 +107,13 @@ async def start(
 #
 # -----------------------------------------------------------------------------
 
-_re_timestamp = re.compile(r'(?P<H>\d\d):(?P<M>\d\d):(?P<S>\d\d)')
+_re_timestamp = re.compile(r"(?P<H>\d\d):(?P<M>\d\d):(?P<S>\d\d)")
 
 
 async def get_link_uptimes(
-    device: Device, timestamp: MetricTimestamp,
-    config: linkflaps.LinkFlapCollectorConfig           # noqa
+    device: Device,
+    timestamp: MetricTimestamp,
+    config: linkflaps.LinkFlapCollectorConfig,  # noqa
 ) -> Optional[List[Metric]]:
     """
     This coroutine will be executed as a asyncio Task on a periodic basis, the
@@ -136,8 +137,10 @@ async def get_link_uptimes(
 
     log_ident = f"{device.name}/{linkflaps.name}"
 
-    if (interfaces_xml := device.private.get('interfaces')) is None:
-        device.log.warning(f"{log_ident}: interface data not avaialble, will try again.")
+    if (interfaces_xml := device.private.get("interfaces")) is None:
+        device.log.warning(
+            f"{log_ident}: interface data not avaialble, will try again."
+        )
         return None
 
     # find all of the interface records that have an eth_link_flapped element,
@@ -145,18 +148,17 @@ async def get_link_uptimes(
     # flapped".  For each of these records we want to convert the value into an
     # "uptime in minutes" metric.
 
-    iface_elist = interfaces_xml.xpath('TABLE_interface/ROW_interface[eth_link_flapped[. != "never"]]')
+    iface_elist = interfaces_xml.xpath(
+        'TABLE_interface/ROW_interface[eth_link_flapped[. != "never"]]'
+    )
     dt_now = maya.now()
     metrics = list()
 
     for rec in iface_elist:
 
-        tags = dict(
-            if_name=rec.findtext('interface'),
-            if_desc=rec.findtext('desc')
-        )
+        tags = dict(if_name=rec.findtext("interface"), if_desc=rec.findtext("desc"))
 
-        last_flapped = rec.findtext('eth_link_flapped')
+        last_flapped = rec.findtext("eth_link_flapped")
 
         # if the last_flapped value is in the "%H:%M:%S" format, then we need to
         # transform it into a duration format that can be consumed by the maya
@@ -170,9 +172,8 @@ async def get_link_uptimes(
 
         # TODO: skip any uptime that is greater than the configured threshold.
 
-        metrics.append(linkflaps.LinkUptimeMetric(
-            value=if_uptime_min, ts=timestamp,
-            tags=tags
-        ))
+        metrics.append(
+            linkflaps.LinkUptimeMetric(value=if_uptime_min, ts=timestamp, tags=tags)
+        )
 
     return metrics

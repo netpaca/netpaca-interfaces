@@ -18,7 +18,7 @@
 This file contains the collctor definition for Link Flap.
 """
 
-from netpaca.collectors import CollectorType, CollectorConfigModel
+from netpaca.collectors import CollectorType
 from netpaca.config_model import CollectorModel  # noqa
 
 # -----------------------------------------------------------------------------

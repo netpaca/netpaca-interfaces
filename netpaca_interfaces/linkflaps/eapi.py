@@ -85,6 +85,7 @@ async def start(
         config=spec.config,
     )
 
+
 # -----------------------------------------------------------------------------
 #
 #                             Collector Coroutine
@@ -93,9 +94,14 @@ async def start(
 
 
 async def get_link_flaps(
-    device: Device, timestamp: MetricTimestamp, config,
+    device: Device,
+    timestamp: MetricTimestamp,  # noqa - not used
+    config,  # noqa - not used
 ) -> Optional[List[Metric]]:
     """
+    This coroutine is used to create the link uptime metrics for Arista EOS
+    systems.  Only interfaces that are link-up are included in the metrics
+    collection.
 
     Parameters
     ----------
@@ -108,50 +114,42 @@ async def get_link_flaps(
     config:
         The collector configuration options
 
-    Returns
-    -------
-    Option list of Metic items.
     """
 
     # wait for the interfaces collector to indicate that the data is available
     # for processing.
 
-    interfaces = device.private['interfaces']
-    await interfaces['event'].wait()
+    interfaces = device.private["interfaces"]
+    await interfaces["event"].wait()
 
-    eos_data = interfaces['data']['interfaces']
-    ifs_ts = interfaces['ts']
-    maya_now = interfaces['maya_ts']
+    eos_data = interfaces["data"]["interfaces"]
+    ifs_ts = interfaces["ts"]
+    maya_now = interfaces["maya_ts"]
 
     metrics = list()
 
     for if_name, if_data in eos_data.items():
+
         # skip interfaces that are not link-up
-        if if_data['interfaceStatus'] != 'connected':
+        if if_data["interfaceStatus"] != "connected":
             continue
 
         # EOS stores the value as an epoc timestamp (float).  We need to convert
         # this to uptime in minutes.
 
-        last_flapped = if_data['lastStatusChangeTimestamp']
+        last_flapped = if_data["lastStatusChangeTimestamp"]
         dt = maya.MayaDT(epoch=last_flapped)
         uptime_min = (maya_now - dt).total_seconds() // 60
 
         # add metric tags for interface name and description
 
-        tags = dict(
-            if_name=if_name,
-            if_desc=if_data['description']
-        )
+        tags = dict(if_name=if_name, if_desc=if_data["description"])
 
         # create the link uptime metric using the timestamp when the interfaces
         # where collected.
 
         metrics.append(
-            linkflaps.LinkUptimeMetric(
-                value=uptime_min,
-                ts=ifs_ts, tags=tags
-            )
+            linkflaps.LinkUptimeMetric(value=uptime_min, ts=ifs_ts, tags=tags)
         )
 
     return metrics

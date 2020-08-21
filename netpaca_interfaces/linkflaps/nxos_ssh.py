@@ -59,6 +59,7 @@ __all__ = []
 #
 # -----------------------------------------------------------------------------
 
+
 @linkflaps.register
 async def start(
     device: Device, executor: CollectorExecutor, spec: linkflaps.CollectorModel
@@ -80,9 +81,7 @@ async def start(
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.debug(
-        f"{device.name}: Starting Cisco NX-OS SSH link flap collector"
-    )
+    device.log.debug(f"{device.name}: Starting Cisco NX-OS SSH link flap collector")
 
     executor.start(
         # required args

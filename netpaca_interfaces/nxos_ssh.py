@@ -61,9 +61,7 @@ __all__ = []
 
 
 @interfaces.register
-async def start(
-    device: Device, executor: CollectorExecutor, spec: CollectorModel
-):
+async def start(device: Device, executor: CollectorExecutor, spec: CollectorModel):
     """
     The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
     purpose of this coroutine is to start the collector task.  Nothing fancy.
@@ -101,8 +99,7 @@ async def start(
 
 
 async def get_raw_interfaces(
-    device: Device, timestamp: MetricTimestamp,
-    config: CollectorModel  # noqa
+    device: Device, timestamp: MetricTimestamp, config: CollectorModel  # noqa
 ) -> Optional[List[Metric]]:
     """
     This coroutine will be executed as a asyncio Task on a periodic basis, the
@@ -126,9 +123,11 @@ async def get_raw_interfaces(
 
     # NOTE: the newline is *required* due to the nature of the device driver looking for
     #       prompt-matching.  Refer to Carl Montanari, author of scrapli.
-    res = await device.driver.send_command('show interface | xml\n')
+    res = await device.driver.send_command("show interface | xml\n")
     if res.failed:
-        device.log.error(f"{device.name}: unable to obtain interface data, will try again.")
+        device.log.error(
+            f"{device.name}: unable to obtain interface data, will try again."
+        )
         return None
 
     # the CLI command response is text, and we need to "take" the
@@ -136,8 +135,8 @@ async def get_raw_interfaces(
     # for later use by the collectors.  The element that parents TABLE_interface
     # is <__readonly__>
 
-    start_of_xml = res.result.find('<__readonly__>')
-    etag = '</__readonly__>'
+    start_of_xml = res.result.find("<__readonly__>")
+    etag = "</__readonly__>"
     end_of_xml = res.result.rfind(etag) + len(etag)
     content = res.result[start_of_xml:end_of_xml]
 
@@ -147,8 +146,8 @@ async def get_raw_interfaces(
     # so that it can be used by other collectors.  The method used here is just
     # a first trial; might use something different in the future.
 
-    device.private['interfaces_ts'] = timestamp
-    device.private['interfaces'] = as_xml
+    device.private["interfaces_ts"] = timestamp
+    device.private["interfaces"] = as_xml
 
     # no metrics to export, so return None.
     return None

@@ -13,9 +13,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
 """
-This file contains the collctor definition for Link Flap.
+This file contains the collctor definition for monitoring link flaps.
 """
 
 from typing import Optional
@@ -36,6 +35,8 @@ from netpaca.config_model import CollectorModel  # noqa
 
 
 class LinkFlapCollectorConfig(CollectorConfigModel):
+    """ link flaps collector configuraiton options """
+
     uptime_threshold: Optional[int] = Field(
         default=False,
         description="""\
@@ -46,8 +47,10 @@ $uptime_threshold minutes.  For example 1 day is 3_840 minutes.
 
 
 class LinkFlapCollectorTags(BaseModel):
-    if_name: str = Field(description='interface name')
-    if_desc: str = Field(description='interface description')
+    """ link uptime metric tags """
+
+    if_name: str = Field(description="interface name")
+    if_desc: str = Field(description="interface description")
 
 
 # -----------------------------------------------------------------------------
@@ -58,9 +61,11 @@ class LinkFlapCollectorTags(BaseModel):
 # This section defines the Metric types supported by the Link Flap Collector
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class LinkUptimeMetric(Metric):
     """ Link uptime in minutes """
+
     value: int
     name: str = "linkflap_uptime"
 

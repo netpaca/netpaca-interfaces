@@ -59,9 +59,7 @@ __all__ = []
 
 
 @interfaces.register
-async def start(
-    device: Device, executor: CollectorExecutor, spec: CollectorModel
-):
+async def start(device: Device, executor: CollectorExecutor, spec: CollectorModel):
     """
     The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
     purpose of this coroutine is to start the collector task.  Nothing fancy.
@@ -81,9 +79,7 @@ async def start(
     """
     device.log.info(f"{device.name}: Starting Arista EOS interfaces collector")
 
-    device.private['interfaces'] = {
-        'event': Event()
-    }
+    device.private["interfaces"] = {"event": Event()}
 
     executor.start(
         # required args
@@ -103,8 +99,7 @@ async def start(
 
 
 async def get_interfaces(
-    device: Device, timestamp: MetricTimestamp,
-    config      # noqa
+    device: Device, timestamp: MetricTimestamp, config  # noqa
 ) -> Optional[List[Metric]]:
     """
     This coroutine will be executed as a asyncio Task on a periodic basis, the
@@ -130,20 +125,20 @@ async def get_interfaces(
     sh_iface = res[0]
 
     if not sh_iface.ok:
-        device.log.error(f"{device.name}/{interfaces.name}: unable to obtain interface data, will try again.")
+        device.log.error(
+            f"{device.name}/{interfaces.name}: unable to obtain interface data, will try again."
+        )
         return None
 
     # store the raw interfaces data into the private area of the device instance
     # so that it can be used by other collectors.  The method used here is just
     # a first trial; might use something different in the future.
 
-    device.private['interfaces'].update({
-        'ts': timestamp,
-        'maya_ts': maya.now(),
-        'data': sh_iface.output
-    })
+    device.private["interfaces"].update(
+        {"ts": timestamp, "maya_ts": maya.now(), "data": sh_iface.output}
+    )
 
     # trigger the pending tasks to awake to process the data.
-    device.private['interfaces']['event'].set()
+    device.private["interfaces"]["event"].set()
 
     return None
