@@ -124,6 +124,8 @@ async def get_raw_interfaces(
     list of Metic items, or None
     """
 
+    # NOTE: the newline is *required* due to the nature of the device driver looking for
+    #       prompt-matching.  Refer to Carl Montanari, author of scrapli.
     res = await device.driver.send_command('show interface | xml\n')
     if res.failed:
         device.log.error(f"{device.name}: unable to obtain interface data, will try again.")
