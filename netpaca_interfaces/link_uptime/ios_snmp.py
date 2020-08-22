@@ -130,7 +130,7 @@ async def get_link_uptimes(
         if did_wrap and if_lc < sys_uptime:
             # ambiguous: lastchange could be sysUptime before or after wrap
 
-            if sys_uptime > 30_000 and if_lc < 30_000:
+            if (sys_uptime > 30_000) and (if_lc < 30_000):
                 # uptime wrap more than 5min ago but lastchange within 5min
                 # assume lastchange was directly after boot -> no action
                 pass

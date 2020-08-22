@@ -112,8 +112,8 @@ _re_timestamp = re.compile(r"(?P<H>\d\d):(?P<M>\d\d):(?P<S>\d\d)")
 
 async def get_link_uptimes(
     device: Device,
-    timestamp: MetricTimestamp,
-    config: link_uptime.LinkUptimeCollectorConfig,  # noqa
+    timestamp: MetricTimestamp,                     # noqa unused
+    config: link_uptime.LinkUptimeCollectorConfig,  # noqa unused
 ) -> Optional[List[Metric]]:
     """
     This coroutine will be executed as a asyncio Task on a periodic basis, the

@@ -36,16 +36,14 @@ from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
 from netpaca.config_model import CollectorModel
 from netpaca.drivers.ios_ssh import Device
+from netpaca.aiosnmp.system import get_sys_uptime, get_snmpengine_uptime
+import netpaca.aiosnmp.interfaces as aio_snmp_ifs
 
 # -----------------------------------------------------------------------------
 # Private Imports
 # -----------------------------------------------------------------------------
 
 import netpaca_interfaces as interfaces
-
-from netpaca_interfaces.aiosnmp.system import get_sys_uptime, get_snmpengine_uptime
-
-import netpaca_interfaces.aiosnmp.interfaces as aio_snmp_ifs
 
 # -----------------------------------------------------------------------------
 # Exports (none)
