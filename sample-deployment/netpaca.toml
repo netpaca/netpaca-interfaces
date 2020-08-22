@@ -123,7 +123,9 @@
         "netpaca_interfaces.link_uptime.nxos_ssh"
     ]
 
-#
-#[device_drivers.ios]
-#    use = "netpaca.device_drivers:cisco.ios_ssh"
-#    modules = ["netpaca_optics.ios_ssh"]
+[device_drivers.ios]
+    use = "netpaca.device_drivers:cisco.ios_ssh"
+    modules = [
+        "netpaca_interfaces.ios_snmp",
+        "netpaca_interfaces.link_uptime.ios_snmp"
+    ]
