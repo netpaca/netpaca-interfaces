@@ -1,5 +1,5 @@
 FROM python:3.8-buster as netpaca
-RUN pip install pip -U && pip install -e git+https://github.com/netpaca/netpaca@jls-devAug20#egg=netpaca[all]
+RUN pip install pip -U && pip install -e git+https://github.com/netpaca/netpaca@master#egg=netpaca[all]
 
 FROM netpaca
 WORKDIR /workdir

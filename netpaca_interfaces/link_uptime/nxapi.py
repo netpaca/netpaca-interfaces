@@ -112,7 +112,7 @@ _re_timestamp = re.compile(r"(?P<H>\d\d):(?P<M>\d\d):(?P<S>\d\d)")
 
 async def get_link_uptimes(
     device: Device,
-    timestamp: MetricTimestamp,                     # noqa unused
+    timestamp: MetricTimestamp,  # noqa unused
     config: link_uptime.LinkUptimeCollectorConfig,  # noqa unused
 ) -> Optional[List[Metric]]:
     """

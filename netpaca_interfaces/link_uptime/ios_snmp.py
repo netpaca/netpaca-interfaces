@@ -97,7 +97,22 @@ async def get_link_uptimes(
     timestamp: MetricTimestamp,  # noqa not used
     config: link_uptime.LinkUptimeCollectorConfig,  # noqa
 ) -> Optional[List[Metric]]:
+    """
+    This coroutine is the periodical interface uptime metrics collect for Cisco IOS
+    that uses the SNMP data from the `interfaces` collector.
 
+    Parameters
+    ----------
+    device: Device
+        The device instance
+
+    timestamp: int
+        The current metric timestamp (ms)
+
+    config: LinkUptimeCollectorConfig
+        The collector configuration as provided from the User configuration
+        file.
+    """
     # wait for the interfaces collector to indicate that the data is available
     # for processing.
 
