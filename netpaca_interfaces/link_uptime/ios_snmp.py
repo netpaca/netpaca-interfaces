@@ -14,16 +14,10 @@
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-This file contains the interface link-flap collector for Cisco NX-OS based
-systems.  Based on current observations, there are three distinct types
-of "uptime" duration formats:
-
-    "07:20:17" - indicates 7 hours 20 minutes 17 seconds ago
-    "6week(s) 1day(s)" - indicates 6 weeks and 1 day ago
-    "3d04h" - indicates 3 day and 4 hours ago
-
-Each of these different types need to be converted into "minutes ago"
-for metric value consistency.
+References
+----------
+Working with Cisco ifLastChange values:
+    https://github.com/netdisco/netdisco/issues/742
 """
 
 # -----------------------------------------------------------------------------
@@ -31,29 +25,20 @@ for metric value consistency.
 # -----------------------------------------------------------------------------
 
 from typing import Optional, List
-import re
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
 
-import maya
-
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
-from netpaca.drivers.nxapi import Device
+from netpaca.drivers.ios_ssh import Device
 
 # -----------------------------------------------------------------------------
 # Private Imports
 # -----------------------------------------------------------------------------
 
 from netpaca_interfaces import link_uptime
-
-# -----------------------------------------------------------------------------
-# Exports (none)
-# -----------------------------------------------------------------------------
-
-__all__ = ["get_link_uptimes"]
 
 # -----------------------------------------------------------------------------
 #
@@ -63,7 +48,7 @@ __all__ = ["get_link_uptimes"]
 
 # -----------------------------------------------------------------------------
 #
-#                 Register Cisco Device NXAPI to Colletor Type
+#                       Collector Start Coroutine
 #
 # -----------------------------------------------------------------------------
 
@@ -73,8 +58,7 @@ async def start(
     device: Device, executor: CollectorExecutor, spec: link_uptime.CollectorModel
 ):
     """
-    The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
-    purpose of this coroutine is to start the collector task.  Nothing fancy.
+    Interface link-uptime metric collector for Cisco IOS SSH/SNMP devices.
 
     Parameters
     ----------
@@ -103,79 +87,89 @@ async def start(
 
 # -----------------------------------------------------------------------------
 #
-#                             Collector Coroutine
+#                             Metric Collector Coroutine
 #
 # -----------------------------------------------------------------------------
-
-_re_timestamp = re.compile(r"(?P<H>\d\d):(?P<M>\d\d):(?P<S>\d\d)")
 
 
 async def get_link_uptimes(
     device: Device,
-    timestamp: MetricTimestamp,  # noqa unused
-    config: link_uptime.LinkUptimeCollectorConfig,  # noqa unused
+    timestamp: MetricTimestamp,  # noqa not used
+    config: link_uptime.LinkUptimeCollectorConfig,  # noqa
 ) -> Optional[List[Metric]]:
     """
-    This coroutine will be executed as a asyncio Task on a periodic basis, the
-    purpose is to collect data from the device and return the list Metrics.
+    This coroutine is the periodical interface uptime metrics collect for Cisco IOS
+    that uses the SNMP data from the `interfaces` collector.
 
     Parameters
     ----------
-    device:
-        The Cisco device driver instance for this device.
+    device: Device
+        The device instance
 
-    timestamp: MetricTimestamp
-        The current timestamp
+    timestamp: int
+        The current metric timestamp (ms)
 
-    config:
-        The collector configuration options
-
-    Returns
-    -------
-    list of Metic items, or None
+    config: LinkUptimeCollectorConfig
+        The collector configuration as provided from the User configuration
+        file.
     """
-
     # wait for the interfaces collector to indicate that the data is available
     # for processing.
 
     interfaces = device.private["interfaces"]
     await interfaces["event"].wait()
-    interfaces_xml = interfaces["data"]
 
-    # find all of the interface records that have an eth_link_flapped element,
-    # not all of them do.  We also want to exclude any record that has "never
-    # flapped".  For each of these records we want to convert the value into an
-    # "uptime in minutes" metric.
+    # now process the collected interface data for link uptime ....
 
-    iface_elist = interfaces_xml.xpath(
-        'TABLE_interface/ROW_interface[eth_link_flapped[. != "never"]]'
-    )
-
-    dt_now = interfaces["maya_ts"]
-    ts_now = interfaces["ts"]
+    dev_uptime_wrapped = device.private["sys_uptime_wrapped"]
+    did_wrap = dev_uptime_wrapped > 0
+    ifs_data = interfaces["data"]
+    ifs_data_ts = interfaces["ts"]
+    sys_uptime = device.private["sys_uptime"]
 
     metrics = list()
 
-    for rec in iface_elist:
+    for if_name, if_rec in ifs_data.items():
 
-        tags = dict(if_name=rec.findtext("interface"), if_desc=rec.findtext("desc"))
+        # skip any interfaces that are not link-up
+        if if_rec["if_link_up"] is False:
+            continue
 
-        last_flapped = rec.findtext("eth_link_flapped")
+        # skip any interface that have ifLastChange == 0 (never)
+        if (if_lc := if_rec["if_lastchange"]) == 0:
+            continue
 
-        # if the last_flapped value is in the "%H:%M:%S" format, then we need to
-        # transform it into a duration format that can be consumed by the maya
-        # package.
+        # need to change scenarios where sysUpTime may have wrapped.  code
+        # lifted from Netdisco project per cited References.
 
-        if (mo := _re_timestamp.match(last_flapped)) is not None:
-            last_flapped = "{}h{}m{}s".format(*mo.groups())
+        if did_wrap and if_lc < sys_uptime:
+            # ambiguous: lastchange could be sysUptime before or after wrap
 
-        if_uptime = dt_now - maya.when(last_flapped)
-        if_uptime_min = if_uptime.total_seconds() // 60
+            if (sys_uptime > 30_000) and (if_lc < 30_000):
+                # uptime wrap more than 5min ago but lastchange within 5min
+                # assume lastchange was directly after boot -> no action
+                pass
 
-        # TODO: skip any uptime that is greater than the configured threshold.
+            else:
+                # uptime wrap less than 5min ago or lastchange > 5min ago
+                # to be on safe side, assume lastchange after counter wrap
+                device.log.warning(
+                    f"{device.name}:{if_name} - correcting ifLastChange, "
+                    "assuming sysUpTime wrap"
+                )
+                if_lc += dev_uptime_wrapped * 2 ** 32
+
+        # add the interface link-uptime metric.
+
+        if_uptime_m = (sys_uptime - if_lc) // 6_000
 
         metrics.append(
-            link_uptime.LinkUptimeMetric(value=if_uptime_min, ts=ts_now, tags=tags)
+            link_uptime.LinkUptimeMetric(
+                ts=ifs_data_ts,
+                tags=dict(if_name=if_name, if_desc=if_rec["if_desc"]),
+                value=if_uptime_m,
+            )
         )
 
+    # done looping through interfaces, return metric list
     return metrics
