@@ -113,7 +113,7 @@ async def get_link_uptimes(
         The collector configuration as provided from the User configuration
         file.
     """
-    
+
     # wait for the interfaces collector to indicate that the data is available
     # for processing.
 
