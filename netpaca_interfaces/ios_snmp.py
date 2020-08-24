@@ -32,6 +32,11 @@ import os
 
 import maya
 
+from pysnmp.hlapi.asyncio import (
+    SnmpEngine,
+    CommunityData
+)
+
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
 from netpaca.config_model import CollectorModel
@@ -87,6 +92,12 @@ async def start(device: Device, executor: CollectorExecutor, spec: CollectorMode
         collector; for example the collector configuration values.
     """
     device.log.info(f"{device.name}: Starting Cisco IOS interfaces collector")
+
+    device.private['pysnmp'] = dict(
+        engine=SnmpEngine(),
+        community=CommunityData(os.environ['SNMP_COMMUNITY'])
+    )
+
     device.private["interfaces"] = {"event": asyncio.Event()}
 
     executor.start(
@@ -125,19 +136,18 @@ async def get_interfaces(
         The collector configuration options
     """
     community = os.environ["SNMP_COMMUNITY"]
-    sys_uptime = await get_sys_uptime(device=device, community=community)
+    sys_uptime = device.private['orig_sys_uptime'] = await get_sys_uptime(device=device)
 
-    snmp_uptime = await get_snmpengine_uptime(device=device, community=community)
+    snmp_uptime = await get_snmpengine_uptime(device=device)
 
     dev_uptime_wrapped = ((snmp_uptime * 100) // _MAX_INT_UPTIME) if snmp_uptime else 0
 
     if dev_uptime_wrapped > 0:
-        new_sys_uptime = sys_uptime + (dev_uptime_wrapped * _MAX_INT_UPTIME)
+        sys_uptime = sys_uptime + (dev_uptime_wrapped * _MAX_INT_UPTIME)
         device.log.warning(
-            f"{device.name}: uptime {sys_uptime} wrapped {dev_uptime_wrapped} times, "
-            f"correcting: {new_sys_uptime}"
+            f"{device.name}: uptime wrapped {dev_uptime_wrapped} times, "
+            f"orig-uptime {device.private['orig_sys_uptime']}, new-uptime: {sys_uptime}"
         )
-        sys_uptime = new_sys_uptime
 
     # storing the SNMP sysUpTime value for potential later use
     device.private["sys_uptime"] = sys_uptime
@@ -146,10 +156,10 @@ async def get_interfaces(
     # colelct the SNMP tables that are needed for this collector
 
     if_tables = await asyncio.gather(
-        aio_snmp_ifs.get_if_name_table(device, community),
-        aio_snmp_ifs.get_if_alias_table(device, community),
-        aio_snmp_ifs.get_if_operstatus_table(device, community),
-        aio_snmp_ifs.get_if_lastchange_table(device, community),
+        aio_snmp_ifs.get_if_name_table(device),
+        aio_snmp_ifs.get_if_alias_table(device),
+        aio_snmp_ifs.get_if_operstatus_table(device),
+        aio_snmp_ifs.get_if_lastchange_table(device),
     )
 
     if_table_keys = ["if_name", "if_desc", "if_link_up", "if_lastchange"]

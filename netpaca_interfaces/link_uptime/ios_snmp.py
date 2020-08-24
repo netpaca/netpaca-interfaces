@@ -73,7 +73,7 @@ async def start(
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.info(f"{device.name}: Starting Cisco NXAPI Link Flap collection")
+    device.log.info(f"{device.name}: Starting Cisco SSH/SNMP linkflap uptime collector")
 
     executor.start(
         # required args
@@ -113,6 +113,7 @@ async def get_link_uptimes(
         The collector configuration as provided from the User configuration
         file.
     """
+
     # wait for the interfaces collector to indicate that the data is available
     # for processing.
 
@@ -126,6 +127,7 @@ async def get_link_uptimes(
     ifs_data = interfaces["data"]
     ifs_data_ts = interfaces["ts"]
     sys_uptime = device.private["sys_uptime"]
+    orig_sys_uptime = device.private['orig_sys_uptime']
 
     metrics = list()
 
@@ -141,8 +143,9 @@ async def get_link_uptimes(
 
         # need to change scenarios where sysUpTime may have wrapped.  code
         # lifted from Netdisco project per cited References.
+        orig_if_lc = if_lc
 
-        if did_wrap and if_lc < sys_uptime:
+        if did_wrap and if_lc < orig_sys_uptime:
             # ambiguous: lastchange could be sysUptime before or after wrap
 
             if (sys_uptime > 30_000) and (if_lc < 30_000):
@@ -159,9 +162,20 @@ async def get_link_uptimes(
                 )
                 if_lc += dev_uptime_wrapped * 2 ** 32
 
-        # add the interface link-uptime metric.
+        # compute the interface uptime in minutes
 
         if_uptime_m = (sys_uptime - if_lc) // 6_000
+
+        if if_uptime_m < 0:
+            # should never get this error, but leaving this here just in case :-)
+            device.log.error(
+                f"{device.name}/{link_uptime.name}: negative time: {if_uptime_m}:\n"
+                f"dev_uptime_wrapped={dev_uptime_wrapped}, sys_uptime={sys_uptime}," 
+                f"orig_if_lc={orig_if_lc}, if_lc={if_lc}"
+            )
+
+        # add the metric with tags and use the timestamp of when the interface
+        # values were originally collected by the `interfaces` collector.
 
         metrics.append(
             link_uptime.LinkUptimeMetric(
@@ -171,5 +185,5 @@ async def get_link_uptimes(
             )
         )
 
-    # done looping through interfaces, return metric list
+    # done looping through interfaces, return metrics list
     return metrics
