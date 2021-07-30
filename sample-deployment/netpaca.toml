@@ -19,7 +19,7 @@
     # be active, then set the collections list.  Otherwise all collectors
     # defined in this configuration file will be used.
 
-    collectors = ["interfaces", "link_uptime"]
+    # collectors = ["interfaces", "link_uptime"]
 
     # currently only one active exporter is supported; but plan to support
     # multiple exports in the future.  If `exporters` is not defined then the
@@ -55,17 +55,11 @@
 #
 # -----------------------------------------------------------------------------
 
-[collectors.interfaces]
+[collectors.ptp_master]
     # used to collect the raw interface data show it can be shared by any of the
     # other metric collectors
-    use = "netpaca.collectors:interfaces"
+    use = "netpaca.collectors:ptp_master"
 
-
-[collectors.link_uptime]
-    use = "netpaca.collectors:link_uptime"
-
-    # do not report metrics for interfaces up longer than 1 day
-    config.uptime_threshold = 1_440
 
 # -----------------------------------------------------------------------------
 # Exporters:
@@ -84,7 +78,7 @@
 [exporters.influxdb]
     use = "netpaca.exporters:influxdb"
     config.server_url = "$INFLUXDB_SERVER"
-    config.database = "interfaces"
+    config.database = "ptp"
 
 # -----------------------------------------------------------------------------
 # Device Drivers:
@@ -105,27 +99,5 @@
 [device_drivers.eos]
     use = "netpaca.device_drivers:arista.eos"
     modules = [
-        "netpaca_interfaces.eapi",
-        "netpaca_interfaces.link_uptime.eapi"
-    ]
-
-[device_drivers.nxos]
-    use = "netpaca.device_drivers:cisco.nxapi"
-    modules = [
-        "netpaca_interfaces.nxapi",
-        "netpaca_interfaces.link_uptime.nxapi"
-    ]
-
-[device_drivers.nxos_ssh]
-    use = "netpaca.device_drivers:cisco.nxos_ssh"
-    modules = [
-        "netpaca_interfaces.nxos_ssh",
-        "netpaca_interfaces.link_uptime.nxos_ssh"
-    ]
-
-[device_drivers.ios]
-    use = "netpaca.device_drivers:cisco.ios_ssh"
-    modules = [
-        "netpaca_interfaces.ios_snmp",
-        "netpaca_interfaces.link_uptime.ios_snmp"
+        "netpaca_ptp.ptp_master.eapi",
     ]

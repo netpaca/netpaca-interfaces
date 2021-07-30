@@ -16,7 +16,7 @@
 
 from setuptools import setup, find_packages
 
-package_name = "netpaca_interfaces"
+package_name = "netpaca_ptp"
 package_version = open("VERSION").read().strip()
 
 
@@ -37,7 +37,7 @@ with open("README.md", "r") as fh:
 setup(
     name=package_name,
     version=package_version,
-    description="Netpaca Interfaces Metrics Collectors",
+    description="Netpaca PTP Metrics Collectors",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Jeremy Schulman",
@@ -46,8 +46,7 @@ setup(
     install_requires=requirements(),
     entry_points={
         "netpaca.collectors": [
-            "interfaces = netpaca_interfaces:InterfaceRawCollectorType",
-            "link_uptime = netpaca_interfaces.link_uptime:LinkUptimeCollectorType",
+            "ptp_master = netpaca_ptp.ptp_master:PtpMasterCollectorType",
         ],
     },
     classifiers=[

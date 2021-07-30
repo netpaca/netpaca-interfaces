@@ -12,32 +12,27 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
-This file implements the interfaces collector for Arista EAPI devices.
-"""
+
 
 # -----------------------------------------------------------------------------
 # System Imports
 # -----------------------------------------------------------------------------
 
 from typing import Optional, List
-from asyncio import Event
 
 # -----------------------------------------------------------------------------
 # Public Imports
 # -----------------------------------------------------------------------------
-import maya
 
 from netpaca import Metric, MetricTimestamp
 from netpaca.collectors.executor import CollectorExecutor
 from netpaca.drivers.eapi import Device
-from netpaca.config_model import CollectorModel
 
 # -----------------------------------------------------------------------------
 # Private Imports
 # -----------------------------------------------------------------------------
 
-import netpaca_interfaces as interfaces
+from netpaca_ptp import ptp_master
 
 # -----------------------------------------------------------------------------
 # Exports (none)
@@ -45,29 +40,32 @@ import netpaca_interfaces as interfaces
 
 __all__ = []
 
+
 # -----------------------------------------------------------------------------
 #
-#                                   CODE BEGINS
+#                                 CODE BEGINS
 #
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 #
-#                 Register Cisco Device NXAPI to Colletor Type
+#                     Register Arista Device to Colletor Type
 #
 # -----------------------------------------------------------------------------
 
 
-@interfaces.register
-async def start(device: Device, executor: CollectorExecutor, spec: CollectorModel):
+@ptp_master.register
+async def start(
+    device: Device, executor: CollectorExecutor, spec: ptp_master.CollectorModel,
+):
     """
-    The IF DOM collector start coroutine for Cisco NX-API enabled devices.  The
-    purpose of this coroutine is to start the collector task.  Nothing fancy.
+    The IF DOM collector start coroutine for Arista EOS devices.  The purpose of this
+    coroutine is to start the collector task.  Nothing fancy.
 
     Parameters
     ----------
     device:
-        The device driver instance for the Cisco device
+        The device driver instance for the Arista device
 
     executor:
         The executor that is used to start one or more collector tasks. In this
@@ -77,14 +75,11 @@ async def start(device: Device, executor: CollectorExecutor, spec: CollectorMode
         The collector model instance that contains information about the
         collector; for example the collector configuration values.
     """
-    device.log.info(f"{device.name}: Starting Arista EOS interfaces collector")
-
-    device.private["interfaces"] = {"event": Event()}
-
+    device.log.info(f"{device.name}: Starting Arista EOS PTP master collector")
     executor.start(
         # required args
         spec=spec,
-        coro=get_interfaces,
+        coro=get_ptp_master,
         device=device,
         # kwargs to collector coroutine:
         config=spec.config,
@@ -98,47 +93,41 @@ async def start(device: Device, executor: CollectorExecutor, spec: CollectorMode
 # -----------------------------------------------------------------------------
 
 
-async def get_interfaces(
-    device: Device, timestamp: MetricTimestamp, config  # noqa
+async def get_ptp_master(
+    device: Device,
+    timestamp: MetricTimestamp,  # noqa - not used
+    config,  # noqa - not used
 ) -> Optional[List[Metric]]:
     """
-    This coroutine will be executed as a asyncio Task on a periodic basis, the
-    purpose is to collect data from the device and return the list Metrics.
+    This coroutine is used to create the link uptime metrics for Arista EOS
+    systems.
 
     Parameters
     ----------
     device:
-        The Cisco device driver instance for this device.
+        The Arisa EOS device driver instance for this device.
 
     timestamp: MetricTimestamp
-        The current timestamp
+        The timestamp now in milliseconds
 
     config:
         The collector configuration options
-
-    Returns
-    -------
-    list of Metic items, or None
     """
 
-    res = await device.eapi.exec(["show interfaces"])
-    sh_iface = res[0]
+    # wait for the interfaces collector to indicate that the data is available
+    # for processing.
 
-    if not sh_iface.ok:
-        device.log.error(
-            f"{device.name}/{interfaces.name}: unable to obtain interface data, will try again."
-        )
-        return None
-
-    # store the raw interfaces data into the private area of the device instance
-    # so that it can be used by other collectors.  The method used here is just
-    # a first trial; might use something different in the future.
-
-    device.private["interfaces"].update(
-        {"ts": timestamp, "maya_ts": maya.now(), "data": sh_iface.output}
+    cli_res, *_ = await device.eapi.exec(
+        ['show ptp masters']
     )
 
-    # trigger the pending tasks to awake to process the data.
-    device.private["interfaces"]["event"].set()
+    if not cli_res.ok:
+        return None
 
-    return None
+    if not (ptp_par := cli_res.output.get('parent')):
+        return None
+
+    if not (gm_clk_qual := ptp_par.get('gmClockQuality')):
+        return None
+
+    return [ptp_master.PtpMasterClassMetric(ts=timestamp, value=gm_clk_qual['clockClass'])]

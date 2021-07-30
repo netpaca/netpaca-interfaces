@@ -17,9 +17,7 @@
 This file contains the collctor definition for monitoring link flaps.
 """
 
-from typing import Optional
 from pydantic.dataclasses import dataclass
-from pydantic import Field, BaseModel
 
 from netpaca import Metric
 from netpaca.collectors import CollectorType, CollectorConfigModel
@@ -33,26 +31,6 @@ from netpaca.config_model import CollectorModel  # noqa
 # configuration file.
 # -----------------------------------------------------------------------------
 
-
-class LinkUptimeCollectorConfig(CollectorConfigModel):
-    """ link flaps collector configuraiton options """
-
-    uptime_threshold: Optional[int] = Field(
-        default=False,
-        description="""\
-Use this value to exclude interfaces that have been up for longer than
-$uptime_threshold minutes.  For example 1 day is 3_840 minutes.
-""",
-    )
-
-
-class LinkUptimeCollectorTags(BaseModel):
-    """ link uptime metric tags """
-
-    if_name: str = Field(description="interface name")
-    if_desc: str = Field(description="interface description")
-
-
 # -----------------------------------------------------------------------------
 #
 #                              Metrics
@@ -63,11 +41,11 @@ class LinkUptimeCollectorTags(BaseModel):
 
 
 @dataclass
-class LinkUptimeMetric(Metric):
+class PtpMasterClassMetric(Metric):
     """ Link uptime in minutes """
 
     value: int
-    name: str = "linkflap_uptime"
+    name: str = "ptp_master_class"
 
 
 # -----------------------------------------------------------------------------
@@ -77,7 +55,7 @@ class LinkUptimeMetric(Metric):
 # -----------------------------------------------------------------------------
 
 
-class LinkUptimeCollectorType(CollectorType):
+class PtpMasterCollectorType(CollectorType):
     """
     This class defines the Link Flap collector specification.  This class is
     "registered" with the "netpaca.collectors" entry_point group via the
@@ -90,17 +68,16 @@ class LinkUptimeCollectorType(CollectorType):
         use = "netpaca.collectors:linkflap"
     """
 
-    name = "link-uptime"
+    name = "ptp-master"
+
     description = """
-Used to collect interface uptime (last flap) metrics
+Collects PTP master metrics
 """
-    config = LinkUptimeCollectorConfig
-    tags: LinkUptimeCollectorTags
-    metrics = [LinkUptimeMetric]
+    metrics = [PtpMasterClassMetric]
 
 
 # create an "alias" variable so that the device specific collector packages
 # can register their start functions.
 
-name = LinkUptimeCollectorType.name
-register = LinkUptimeCollectorType.start.register
+name = PtpMasterCollectorType.name
+register = PtpMasterCollectorType.start.register
